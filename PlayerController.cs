@@ -87,19 +87,6 @@ public class PlayerController : MonoBehaviour
                     }
                 }
             }
-            else if (currentInteractableObject.CompareTag("Kayu"))
-            {
-                interactionText.text = "Tekan [E] untuk Mengambil Kayu";
-                interactionText.gameObject.SetActive(true);
-                if (Input.GetKeyDown(KeyCode.E))
-                {
-                    Rigidbody rb = currentInteractableObject.GetComponent<Rigidbody>();
-                        if (rb != null)
-                        {
-                            rb.isKinematic = false; // Disable physics
-                        }
-                }
-            }
             else if (currentInteractableObject.CompareTag("LeverHolder"))
             {
                 interactionText.text = "Buka inventaris untuk menempatkan Tuas";
@@ -115,6 +102,33 @@ public class PlayerController : MonoBehaviour
                     if (leverMechanism != null)
                     {
                         leverMechanism.ActivateLever();
+                    }
+                }
+            }
+            else if (currentInteractableObject.CompareTag("Kayu"))
+            {
+                interactionText.text = "Tekan [E] untuk Menyingkirkan Kayu";
+                interactionText.gameObject.SetActive(true);
+                if (Input.GetKeyDown(KeyCode.E))
+                {
+                    Rigidbody rb = currentInteractableObject.GetComponent<Rigidbody>();
+                    if (rb != null)
+                    {
+                        rb.isKinematic = false;
+                        rb.AddForce(mainCamera.transform.forward * 5f, ForceMode.Impulse);
+                    }
+                }
+            }
+            else if (currentInteractableObject.CompareTag("ChargerStation"))
+            {
+                interactionText.text = "Tekan E untuk mengisi daya baterai";
+                interactionText.gameObject.SetActive(true);
+                if (Input.GetKeyDown(KeyCode.E))
+                {
+                    ChargingStation station = currentInteractableObject.GetComponent<ChargingStation>();
+                    if (station != null)
+                    {
+                        station.ChargeBattery();
                     }
                 }
             }
