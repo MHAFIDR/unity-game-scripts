@@ -16,10 +16,11 @@ public class PlayerController : MonoBehaviour
     [Header("Interaction Settings")]
     public float interactionDistance = 3f;
     public TextMeshProUGUI interactionText;
-    
+
     private float defaultAim;
     private float camFOV;
     private GameObject currentInteractableObject;
+    private bool justInteracted = false;
 
     void Awake()
     {
@@ -46,7 +47,7 @@ public class PlayerController : MonoBehaviour
     {
         HandleInteraction();
 
-        if (GameManager.instance.isUiOpen)
+        if (GameManager.instance != null && GameManager.instance.isUiOpen)
         {
             return;
         }
@@ -67,35 +68,52 @@ public class PlayerController : MonoBehaviour
     void HandleInteraction()
     {
         interactionText.gameObject.SetActive(false);
-        currentInteractableObject = null; 
+        currentInteractableObject = null;
+
+        // Reset just interacted flag
+        if (justInteracted)
+        {
+            justInteracted = false;
+            return;
+        }
 
         RaycastHit hit;
         if (Physics.Raycast(mainCamera.transform.position, mainCamera.transform.forward, out hit, interactionDistance))
         {
             currentInteractableObject = hit.collider.gameObject;
+            string textToShow = "";
 
+            // Handle different object types
             if (currentInteractableObject.CompareTag("PickupItem"))
             {
                 PickupItem item = currentInteractableObject.GetComponent<PickupItem>();
                 if (item != null && !item.isAmmoPickup && !item.isHealthPickup)
                 {
-                    interactionText.text = "Tekan [E] untuk mengambil " + item.mName;
-                    interactionText.gameObject.SetActive(true);
+                    textToShow = "Tekan [E] untuk mengambil " + item.mName;
                     if (Input.GetKeyDown(KeyCode.E))
                     {
                         PerformPickup(item, currentInteractableObject);
                     }
                 }
             }
+            // Handle ItemPickup (dari PlayerInteraction)
+            else if (currentInteractableObject.GetComponent<ItemPickup>() != null)
+            {
+                ItemPickup itemPickup = currentInteractableObject.GetComponent<ItemPickup>();
+                textToShow = "Tekan E untuk mengambil " + itemPickup.itemData.itemName;
+                if (Input.GetKeyDown(KeyCode.E))
+                {
+                    itemPickup.PickupItem();
+                }
+            }
             else if (currentInteractableObject.CompareTag("LeverHolder"))
             {
-                interactionText.text = "Buka inventaris untuk menempatkan Tuas";
-                interactionText.gameObject.SetActive(true);
+                textToShow = "Buka inventaris untuk menempatkan Tuas";
             }
-            else if (currentInteractableObject.CompareTag("LeverMechanism"))
+            else if (currentInteractableObject.CompareTag("LeverMechanism") || 
+                     currentInteractableObject.GetComponent<LeverMechanism>() != null)
             {
-                interactionText.text = "Tekan [E] untuk Mengaktifkan Tuas";
-                interactionText.gameObject.SetActive(true);
+                textToShow = "Tekan [E] untuk mengaktifkan tuas";
                 if (Input.GetKeyDown(KeyCode.E))
                 {
                     LeverMechanism leverMechanism = currentInteractableObject.GetComponent<LeverMechanism>();
@@ -107,8 +125,7 @@ public class PlayerController : MonoBehaviour
             }
             else if (currentInteractableObject.CompareTag("Kayu"))
             {
-                interactionText.text = "Tekan [E] untuk Menyingkirkan Kayu";
-                interactionText.gameObject.SetActive(true);
+                textToShow = "Tekan [E] untuk Menyingkirkan Kayu";
                 if (Input.GetKeyDown(KeyCode.E))
                 {
                     Rigidbody rb = currentInteractableObject.GetComponent<Rigidbody>();
@@ -119,10 +136,10 @@ public class PlayerController : MonoBehaviour
                     }
                 }
             }
-            else if (currentInteractableObject.CompareTag("ChargerStation"))
+            else if (currentInteractableObject.CompareTag("ChargerStation") ||
+                     currentInteractableObject.GetComponent<ChargingStation>() != null)
             {
-                interactionText.text = "Tekan E untuk mengisi daya baterai";
-                interactionText.gameObject.SetActive(true);
+                textToShow = "Tekan E untuk mengisi daya baterai";
                 if (Input.GetKeyDown(KeyCode.E))
                 {
                     ChargingStation station = currentInteractableObject.GetComponent<ChargingStation>();
@@ -132,6 +149,29 @@ public class PlayerController : MonoBehaviour
                     }
                 }
             }
+            else if (currentInteractableObject.CompareTag("PlaceBomTime"))
+            {
+                textToShow = "Buka inventaris untuk meletakkan bom di sini";
+            }
+            else if (currentInteractableObject.CompareTag("BombWaktu"))
+            {
+                textToShow = "Tekan E untuk mengaktifkan bom";
+                if (Input.GetKeyDown(KeyCode.E))
+                {
+                    BombController bomb = currentInteractableObject.GetComponent<BombController>();
+                    if (bomb != null)
+                    {
+                        bomb.Detonate();
+                    }
+                }
+            }
+
+            // Show interaction text if valid
+            if (!string.IsNullOrEmpty(textToShow))
+            {
+                interactionText.text = textToShow;
+                interactionText.gameObject.SetActive(true);
+            }
         }
     }
 
@@ -139,7 +179,12 @@ public class PlayerController : MonoBehaviour
     {
         if (item.itemData != null)
         {
-            InventoryManager.instance.playerInventory.Add(item.itemData);
+            bool success = InventoryManager.instance.playerInventory.Add(item.itemData);
+            if (!success)
+            {
+                Debug.Log("Inventory penuh!");
+                return;
+            }
             InventoryManager.instance.UpdateUI();
         }
 
@@ -151,7 +196,7 @@ public class PlayerController : MonoBehaviour
                 weapon.UpdateAmmoUI();
             }
         }
-        
+
         if (item.isHealthPickup)
         {
             HealthManager healthManager = GetComponent<HealthManager>();
@@ -165,7 +210,7 @@ public class PlayerController : MonoBehaviour
         {
             LeanPool.Spawn(item.pickupFX, itemObject.transform.position, Quaternion.identity);
         }
-        
+
         if (item.pickupSFX != null)
         {
             AudioSource.PlayClipAtPoint(item.pickupSFX, itemObject.transform.position);
@@ -173,11 +218,11 @@ public class PlayerController : MonoBehaviour
 
         Destroy(itemObject);
     }
-    
+
     void HandleWeapon()
     {
         if (weapon == null || EventSystem.current.IsPointerOverGameObject()) return;
-        
+
         if (Input.GetMouseButton(0)) { weapon.shoot(); }
         else if (Input.GetMouseButtonUp(0)) { weapon.StopShoot(); }
         if (weapon.currentAmmo < weapon.maxAmmo && Input.GetKeyDown(KeyCode.R)) { StartCoroutine(weapon.Reload()); }
@@ -203,6 +248,7 @@ public class PlayerController : MonoBehaviour
                 InventoryManager.instance.playerInventory.Remove(leverItemData);
                 holder.PlaceLever();
                 InventoryManager.instance.UpdateUI();
+                justInteracted = true;
                 Debug.Log("Lever placed from inventory!");
             }
             else
@@ -213,6 +259,53 @@ public class PlayerController : MonoBehaviour
         else
         {
             Debug.Log("You are not looking at anything interactable.");
+        }
+    }
+
+    // TAMBAHAN: Method untuk item-item lain (dari PlayerInteraction)
+    public void UseLever(LeverItem leverItem)
+    {
+        if (currentInteractableObject != null)
+        {
+            LeverHolder holder = currentInteractableObject.GetComponent<LeverHolder>();
+            if (holder != null)
+            {
+                holder.PlaceLever();
+                InventoryManager.instance.playerInventory.Remove(leverItem);
+                InventoryManager.instance.UpdateUI();
+                justInteracted = true;
+            }
+            else
+            {
+                Debug.Log("You must be looking at a lever holder to use this.");
+            }
+        }
+        else
+        {
+            Debug.Log("You can't use that here.");
+        }
+    }
+
+    public void UseBombItem(TimedBombItem bombItem)
+    {
+        if (currentInteractableObject != null)
+        {
+            BombPlacement placementZone = currentInteractableObject.GetComponent<BombPlacement>();
+            if (placementZone != null)
+            {
+                placementZone.PlaceBomb();
+                InventoryManager.instance.playerInventory.Remove(bombItem);
+                InventoryManager.instance.UpdateUI();
+                justInteracted = true;
+            }
+            else
+            {
+                Debug.Log("You must be at a designated placement zone to use the bomb.");
+            }
+        }
+        else
+        {
+            Debug.Log("You can't use that here.");
         }
     }
 }
