@@ -67,10 +67,14 @@ public class PlayerController : MonoBehaviour
 
     void HandleInteraction()
     {
+        if (GameManager.instance.isUiOpen)
+        {
+        interactionText.gameObject.SetActive(false);
+        return; 
+        }
         interactionText.gameObject.SetActive(false);
         currentInteractableObject = null;
 
-        // Reset just interacted flag
         if (justInteracted)
         {
             justInteracted = false;
